@@ -174,7 +174,19 @@ async function bloomFlush(){
  }
 }
 document.getElementById('cloudTestStatus').addEventListener('click',()=>{if(bloomPendingSnapshot){bloomStatus('☁️ Speichern …');bloomFlush();}});
-const $=id=>document.getElementById(id),n=(x)=>Math.max(0,num(x));const recipes=()=> (bloomSharedMode?[...data.recipes.filter(r=>!bloomSharedRecipes.some(x=>x.recipe_data?.id===r.id)),...bloomSharedRecipes.map(x=>({...x.recipe_data,_sharedId:x.id,_authorId:x.author_id}))]:data.recipes).filter(r=>!bloomIsOriginalSample(r));const macros=r=>r.ingredients.reduce((a,i)=>{for(const k of ['kcal','p','c','f','sugar'])a[k]+=n(i.g)*n(i[k])/100;return a},{kcal:0,p:0,c:0,f:0,sugar:0});
+const $=id=>document.getElementById(id),n=(x)=>Math.max(0,num(x));// Doppelte Anzeige aus privater und gemeinsamer Sammlung vermeiden.
+// Keine Datensaetze loeschen: private IDs bleiben fuer bestehende Essensplaene erhalten.
+function bloomRecipeIdentity(r){return String(r?.name||'').trim().toLocaleLowerCase('de').replace(/\s+/g,' ')+'|'+String(r?.type||'').trim().toLocaleLowerCase('de')}
+const recipes=()=>{
+ const local=(Array.isArray(data.recipes)?data.recipes:[]).filter(r=>!bloomIsOriginalSample(r));
+ if(!bloomSharedMode)return local;
+ const shared=bloomSharedRecipes.map(x=>({...x.recipe_data,_sharedId:x.id,_authorId:x.author_id})).filter(r=>!bloomIsOriginalSample(r));
+ const localIds=new Set(local.map(r=>r.id));
+ const localKeys=new Set(local.map(bloomRecipeIdentity));
+ // Gleiche IDs oder gleiche Namen UND Kategorien in beiden Quellen nur einmal anzeigen.
+ // Echte unterschiedliche Rezepte innerhalb einer Quelle bleiben unveraendert.
+ return [...local,...shared.filter(r=>!localIds.has(r.id)&&!localKeys.has(bloomRecipeIdentity(r)))];
+};const macros=r=>r.ingredients.reduce((a,i)=>{for(const k of ['kcal','p','c','f','sugar'])a[k]+=n(i.g)*n(i[k])/100;return a},{kcal:0,p:0,c:0,f:0,sugar:0});
 const recipeWeight=r=>n(r.cookedWeight)||r.ingredients.reduce((a,i)=>a+n(i.g),0);
 const portions=(r,q=1,grams=null)=>{let m=macros(r),f=grams!==null?n(grams)/Math.max(1,recipeWeight(r)):n(q)/Math.max(1,n(r.servings));return Object.fromEntries(Object.entries(m).map(([k,v])=>[k,Math.round(v*f*10)/10]))};const plansFor=(date,p=person)=>data.plans[p][date]||{};const logsFor=(date,p=person)=>data.logs[p][date]||{};const totalFor=(date,p=person)=>{const a={kcal:0,p:0,c:0,f:0,sugar:0};for(const x of Object.values(logsFor(date,p))){const r=recipes().find(r=>r.id===x.recipe);if(r){const m=portions(r,x.servings,x.grams??null);for(const k in a)a[k]+=m[k]}}for(const entry of (data.foodEntries?.[p]?.[date]||[])){const m=foodEntryMacros(entry);for(const k in a)a[k]+=m[k]}for(const k in a)a[k]=Math.round(a[k]*10)/10;return a;};const bloomMainGroups={home:'home',food:'food',recipes:'food',week:'food',workouts:'workouts',strength:'workouts',activities:'workouts',together:'together',progress:'settings',settings:'settings',coach:'settings'};
 const bloomMainTabs=[['home','⌂ Start'],['food','🥗 Ernährung'],['workouts','✦ Bewegung'],['together','💬 Gemeinsam'],['progress','🌸 Mein Bereich']];
